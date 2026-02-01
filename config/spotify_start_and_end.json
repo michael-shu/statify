@@ -1,0 +1,26 @@
+{
+  "reasons_start": {
+    "appload": "App loaded",
+    "backbtn": "Back button pressed",
+    "clickrow": "Track selected",
+    "fwdbtn": "Next button pressed",
+    "playbtn": "Play button pressed",
+    "remote": "Started remotely",
+    "trackdone": "Previous track finished",
+    "trackerror": "Playback error",
+    "unknown": "Unknown"
+  },
+
+  "reasons_end": {
+    "backbtn": "Skipped (Previous button)",
+    "endplay": "Playback stopped",
+    "fwdbtn": "Skipped (Next button)",
+    "logout": "User logged out",
+    "remote": "Interrupted remotely",
+    "trackdone": "Track finished",
+    "trackerror": "Playback error",
+    "unexpected-exit": "App exited unexpectedly",
+    "unexpected-exit-while-paused": "App exited unexpectedly (while paused)",
+    "unknown": "Unknown"
+  }
+}
