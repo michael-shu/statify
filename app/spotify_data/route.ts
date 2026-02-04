@@ -1,5 +1,7 @@
 import fs from "fs";
-var JSZip = require('jszip')
+const JSZip = require('jszip');
+import type { BaseProcessedEntry, ProcessedEntry, SpotifyPlayEntry} from '@/lib/db';
+
 
 const get_filenames = () => {
   const file_names = fs.readdirSync("./spotify_extended_streaming_history/");
@@ -44,107 +46,6 @@ function millisToMinutesAndSeconds(millis: number) {
     ? minutes + 1 + ":00"
     : minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
 }
-
-/*
- {
-        "ts": "2016-12-17T23:35:02Z",
-        "platform": "Windows 10 (10.0.14393; x64)",
-        "ms_played": 74990,
-        "conn_country": "US",
-        "ip_addr": "67.80.182.105",
-        "master_metadata_track_name": "I Know What's Real",
-        "master_metadata_album_artist_name": "A Boogie Wit da Hoodie",
-        "master_metadata_album_album_name": "Artist",
-        "spotify_track_uri": "spotify:track:2LrOjkIlb6yzYYpfp5zBZC",
-        "episode_name": null,
-        "episode_show_name": null,
-        "spotify_episode_uri": null,
-        "audiobook_title": null,
-        "audiobook_uri": null,
-        "audiobook_chapter_uri": null,
-        "audiobook_chapter_title": null,
-        "reason_start": "clickrow",
-        "reason_end": "endplay",
-        "shuffle": false,
-        "skipped": false,
-        "offline": false,
-        "offline_timestamp": null,
-        "incognito_mode": false
-}
-
- */
-type SpotifyPlayEntry = {
-  ts: string;
-  platform: string;
-  ms_played: number;
-  conn_country: string;
-  ip_addr: string;
-
-  master_metadata_track_name: string | null;
-  master_metadata_album_artist_name: string | null;
-  master_metadata_album_album_name: string | null;
-  spotify_track_uri: string | null;
-
-  episode_name: string | null;
-  episode_show_name: string | null;
-  spotify_episode_uri: string | null;
-
-  audiobook_title: string | null;
-  audiobook_uri: string | null;
-  audiobook_chapter_uri: string | null;
-  audiobook_chapter_title: string | null;
-
-  reason_start: string;
-  reason_end: string;
-
-  shuffle: boolean;
-  skipped: boolean;
-  offline: boolean;
-  offline_timestamp: number | null;
-  incognito_mode: boolean;
-};
-
-type BaseProcessedEntry = {
-  uri: string;
-
-  start_time: string | null;
-  end_time: string | null;
-
-  reason_start: string;
-  reason_end: string;
-
-  offline: "Online" | "Offline";
-  hidden: "Hidden" | "Not Hidden";
-  shuffle: "Shuffled" | "Not Shuffled";
-  skipped: "Skipped" | "Not Skipped";
-
-  played_duration: string; // "2:16"
-};
-
-type TrackProcessedEntry = BaseProcessedEntry & {
-  type: "track";
-  track_name: string | null;
-  artist_name: string | null;
-  album_name: string | null;
-};
-
-type PodcastProcessedEntry = BaseProcessedEntry & {
-  type: "episode";
-  episode_name: string | null;
-  podcast_name: string | null;
-};
-
-type AudiobookProcessedEntry = BaseProcessedEntry & {
-  type: "audiobook";
-  title: string | null;
-  chapter_title: string | null;
-  chapter_uri: string | null;
-};
-
-type ProcessedEntry =
-  | TrackProcessedEntry
-  | PodcastProcessedEntry
-  | AudiobookProcessedEntry;
 
 const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
   const start_time = !entry.offline_timestamp
@@ -218,9 +119,17 @@ const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
   }
 };
 
-const process_data_total = (data: any) => {
+const process_data_total = (data: SpotifyPlayEntry[]) => {
 
   const total_songs = new Map();
+  const total_artists = new Map();
+  const total_albums = new Map();
+  const total_hidden = new Map();
+  const total_countries = new Map();
+  const total_discovered_per_month = new Map();
+
+
+
     for (const entry of data) {
       const processed = process_entry(entry);
 
@@ -231,6 +140,7 @@ const process_data_total = (data: any) => {
               track_name: processed.track_name,
               artist_name: processed.artist_name,
               album_name: processed.album_name,
+              timestamp_first_played: entry.ts,
             },
             type: "track",
             plays: [],
@@ -241,6 +151,7 @@ const process_data_total = (data: any) => {
               title: processed.chapter_title,
               chapter_title: processed.chapter_title,
               chapter_uri: processed.chapter_uri,
+              timestamp_first_played: entry.ts,
             },
             type: "audiobook",
             plays: [],
@@ -250,6 +161,7 @@ const process_data_total = (data: any) => {
             info: {
               episode_name: processed.episode_name,
               podcast_name: processed.podcast_name,
+              timestamp_first_played: entry.ts,
             },
             type: "podcast",
             plays: [],
@@ -277,7 +189,7 @@ const process_data_total = (data: any) => {
     start_end_data.reasons_start = reasons_start;
     start_end_data.reasons_end = reasons_end;
     fs.writeFileSync(
-      "spotify_start_and_end.json",
+      "config/spotify_start_and_end.json",
       JSON.stringify(start_end_data, null, 2),
       "utf-8"
     );

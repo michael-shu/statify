@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 
-const upload = () => {
+const Upload = () => {
   const [isUploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -28,7 +28,7 @@ const upload = () => {
             const uploadRequest = await fetch("/spotify_data", {
               method: "POST", 
               body:data
-            })
+            });
 
           }
         }}
@@ -61,4 +61,4 @@ const upload = () => {
   );
 };
 
-export default upload;
+export default Upload;
