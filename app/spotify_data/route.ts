@@ -1,15 +1,11 @@
 import fs from "fs";
-const JSZip = require('jszip');
-import type { BaseProcessedEntry, ProcessedEntry, SpotifyPlayEntry} from '@/lib/db';
-
-
-const get_filenames = () => {
-  const file_names = fs.readdirSync("./spotify_extended_streaming_history/");
-
-  const result = file_names.filter((file_name) => file_name.endsWith("json"))
-
-  return result;
-};
+const JSZip = require("jszip");
+import type {
+  BaseProcessedEntry,
+  ProcessedEntry,
+  SpotifyPlayEntry,
+} from "@/lib/db";
+import { COUNTRY_CODE_TO_NAME } from "@/lib/db";
 
 const format_date = (date_str: string, timeZone = "America/New_York") => {
   const date = new Date(date_str);
@@ -21,6 +17,7 @@ const format_date = (date_str: string, timeZone = "America/New_York") => {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    second: "2-digit",
     hour12: true,
   });
   try {
@@ -31,13 +28,6 @@ const format_date = (date_str: string, timeZone = "America/New_York") => {
   }
 };
 
-const start_end_data = JSON.parse(
-  fs.readFileSync("config/spotify_start_and_end.json", "utf-8")
-);
-
-const reasons_start = start_end_data.reasons_start;
-const reasons_end = start_end_data.reasons_end;
-
 function millisToMinutesAndSeconds(millis: number) {
   const hours = Math.floor(millis / 3600000);
   const minutes = Math.floor(millis / 60000);
@@ -47,26 +37,27 @@ function millisToMinutesAndSeconds(millis: number) {
     : minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
 }
 
-const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
-  const start_time = !entry.offline_timestamp
-    ? null
-    : format_date(new Date(entry.offline_timestamp * 1000).toISOString());
+const start_end_data = JSON.parse(
+  fs.readFileSync("config/spotify_start_and_end.json", "utf-8")
+);
 
-  /*
-  //Visual of above code line
+const reasons_start = start_end_data.reasons_start;
+const reasons_end = start_end_data.reasons_end;
 
-  //Offline timestamp. Sometimes null.
-  if (entry.offline_timestamp == null) {
-    start_time = null;
-  } else {
-    //If given null, it will give December 31, 1969 at 7:00 PM, so no need to calculate
-    start_time = format_date(
-      new Date(entry.offline_timestamp * 1000).toISOString()
-    );
-  }*/
+const calculate_start_end = (entry: SpotifyPlayEntry) => {
+  const end = new Date(entry.ts);
+  const start = new Date(end.getTime() - entry.ms_played);
+  //Using .ts, when event is finished
+  // From spotify: ts is "Date and time of when the stream ended in UTC format."
 
-  //Using .ts, when event is sent and logged in server
+  const start_time = format_date(start.toISOString());
   const end_time = format_date(entry.ts);
+
+  return [start_time, end_time];
+};
+
+const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
+  const [start_time, end_time] = calculate_start_end(entry);
 
   const baseEntry = {
     start_time: start_time ?? "",
@@ -75,10 +66,10 @@ const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
 
     reason_end: reasons_end[entry.reason_end] || entry.reason_end,
     offline: entry.offline ? "Offline" : "Online",
-    hidden: entry.incognito_mode ? "Hidden" : "Not Hidden",
+    //hidden: entry.incognito_mode ? "Yes Hidden" : "Not Hidden",
     shuffle: entry.shuffle ? "Shuffled" : "Not Shuffled",
 
-    skipped: entry.skipped ? "Skipped" : "Not Skipped",
+    //skipped: entry.skipped ? "Yes Skipped" : "Not Skipped",
 
     played_duration: millisToMinutesAndSeconds(entry.ms_played),
   } satisfies Omit<BaseProcessedEntry, "uri">;
@@ -90,10 +81,7 @@ const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
       ...baseEntry,
 
       type: "track",
-      track_name: entry.master_metadata_track_name,
-      artist_name: entry.master_metadata_album_artist_name,
-      album_name: entry.master_metadata_album_album_name,
-      uri: entry.spotify_track_uri ?? "",
+      //uri: entry.spotify_track_uri ?? "",
     };
   } else if (entry.episode_name) {
     //Podcast data
@@ -103,7 +91,7 @@ const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
       type: "episode",
       episode_name: entry.episode_name,
       podcast_name: entry.episode_show_name,
-      uri: entry.spotify_episode_uri ?? "",
+      //uri: entry.spotify_episode_uri ?? "",
     };
   } else {
     // Audiobook data
@@ -112,7 +100,7 @@ const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
 
       type: "audiobook",
       title: entry.audiobook_title,
-      uri: entry.audiobook_uri ?? "",
+      //uri: entry.audiobook_uri ?? "",
       chapter_title: entry.audiobook_chapter_title,
       chapter_uri: entry.audiobook_chapter_uri,
     };
@@ -120,65 +108,142 @@ const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
 };
 
 const process_data_total = (data: SpotifyPlayEntry[]) => {
-
   const total_songs = new Map();
   const total_artists = new Map();
   const total_albums = new Map();
-  const total_hidden = new Map();
   const total_countries = new Map();
-  const total_discovered_per_month = new Map();
+  const total_discovered_per_month = new Map([
+      ["January",   [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["February",  [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["March",     [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["April",     [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["May",       [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["June",      [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["July",      [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["August",    [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["September", [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["October",   [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["November",  [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+      ["December",  [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
+  ]);
 
+  for (const entry of data.slice(100000, 110000)) {
+    const processed = process_entry(entry);
 
+    if (processed.type === "track") {
+      const artistName = entry.master_metadata_album_artist_name;
+      const trackName = entry.master_metadata_track_name;
+      const albumName = entry.master_metadata_album_album_name;
+      const uri = entry.spotify_track_uri || "";
 
-    for (const entry of data) {
-      const processed = process_entry(entry);
+      //Song map
+      if (!total_songs.has(uri)) {
+        total_songs.set(uri, {
+          info: {
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            timestamp_first_played: entry.ts,
+          },
+          type: "track",
+          plays: [],
+          hidden: [],
+          skipped: [],
+        });
 
-      if (!total_songs.has(processed.uri)) {
-        if (processed.type === "track") {
-          total_songs.set(processed.uri, {
-            info: {
-              track_name: processed.track_name,
-              artist_name: processed.artist_name,
-              album_name: processed.album_name,
-              timestamp_first_played: entry.ts,
-            },
-            type: "track",
-            plays: [],
-          });
-        } else if (processed.type === "audiobook") {
-          total_songs.set(processed.uri, {
-            info: {
-              title: processed.chapter_title,
-              chapter_title: processed.chapter_title,
-              chapter_uri: processed.chapter_uri,
-              timestamp_first_played: entry.ts,
-            },
-            type: "audiobook",
-            plays: [],
-          });
-        } else {
-          total_songs.set(processed.uri, {
-            info: {
-              episode_name: processed.episode_name,
-              podcast_name: processed.podcast_name,
-              timestamp_first_played: entry.ts,
-            },
-            type: "podcast",
-            plays: [],
-          });
-        }
+        const discovery_month = new Date(entry.ts).getMonth();
+
+        //Discovered map
+        const month_data = total_discovered_per_month.get(discovery_month);
+        
       }
 
-      total_songs.get(processed.uri).plays.push(processed);
+      
 
-      if (!(entry.reason_start in reasons_start)) {
-        reasons_start[entry.reason_start] =
-          "UNCLARIFIED_REASON" + entry.reason_start;
+      //Artist map
+      let artist = total_artists.get(artistName);
+
+      if (!artist) {
+        artist = { plays: 0, songs: {} };
+        total_artists.set(artistName, artist);
       }
-      if (!(entry.reason_end in reasons_end)) {
-        reasons_end[entry.reason_end] = "UNCLARIFIED_REASON" + entry.reason_end;
+
+      if (!artist.songs[uri]) {
+        artist.songs[uri] = {
+          uri: uri,
+          title: entry.master_metadata_track_name,
+          plays: 0,
+        };
       }
+      artist.plays++;
+      artist.songs[uri].plays++;
+
+      //Album map
+      let album = total_albums.get(albumName);
+
+      if (!album) {
+        album = {
+          artist: artistName,
+          plays: 0,
+          songs: {},
+        };
+      }
+
+      if (!album.songs[uri]) {
+        album.songs[uri] = {
+          uri: uri,
+          title: entry.master_metadata_track_name,
+          plays: 0,
+        };
+      }
+      album.plays++;
+      album.songs[uri].plays++;
+
+      //countries
+      //codes possible are:
+      const country_name =
+        COUNTRY_CODE_TO_NAME[entry.conn_country] ?? "unknown country";
+      let country = total_countries.get(entry.conn_country);
+
+      if (!country) {
+        country = {
+          country: country_name,
+          plays: 0,
+          songs: {},
+        };
+      }
+      if (!country.songs[entry.conn_country]) {
+        country.songs[uri] = {
+          uri: uri,
+          title: entry.master_metadata_track_name,
+          plays: 0,
+        };
+      }
+      country.plays++;
+      country.songs[uri].plays++;
+
+      if (entry.incognito_mode) {
+        //total_songs.get(processed.uri).hidden += 1;
+
+        total_songs.get(uri).hidden.push(processed);
+      } else if (entry.skipped) {
+        //total_songs.get(processed.uri).skipped += 1;
+        total_songs.get(uri).skipped.push(processed);
+      } else {
+        total_songs.get(uri).plays.push(processed);
+      }
+    } else if (processed.type === "audiobook") {
+    } /*processed.type === "podcast" */ else {
     }
+
+    if (!(entry.reason_start in reasons_start)) {
+      reasons_start[entry.reason_start] =
+        "UNCLARIFIED_REASON" + entry.reason_start;
+    }
+    if (!(entry.reason_end in reasons_end)) {
+      reasons_end[entry.reason_end] = "UNCLARIFIED_REASON" + entry.reason_end;
+    }
+  }
 
   if (
     Object.keys(start_end_data.reasons_start).length !==
@@ -193,13 +258,16 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
       JSON.stringify(start_end_data, null, 2),
       "utf-8"
     );
+
+    fs.writeFileSync("config/orderings.sjon", JSON.stringify());
   }
 
-  const sorted_songs = Array.from(total_songs.entries()).sort((a, b) => b[1].plays.length - a[1].plays.length);
+  const sorted_songs = Array.from(total_songs.entries()).sort(
+    (a, b) => b[1].plays.length - a[1].plays.length
+  );
 
   return sorted_songs;
 };
-
 
 export async function POST(request: Request) {
   const data = await request.formData();
@@ -209,47 +277,45 @@ export async function POST(request: Request) {
   console.log("This is the file");
   console.log(file);
 
-   // ✅ Convert File -> ArrayBuffer (what JSZip can read)
-   const arrayBuffer = await file.arrayBuffer();
+  // ✅ Convert File -> ArrayBuffer (what JSZip can read)
+  const arrayBuffer = await file.arrayBuffer();
 
-   // ✅ Await the zip load (don’t use .then in a route handler)
-   const zip = await JSZip.loadAsync(arrayBuffer);
+  // ✅ Await the zip load (don’t use .then in a route handler)
+  const zip = await JSZip.loadAsync(arrayBuffer);
 
-
-   const allEntries = [];
-   for (const [path, zf] of Object.entries(zip.files)) {
+  const allEntries = [];
+  for (const [path, zf] of Object.entries(zip.files)) {
     if (zf.dir) continue; // skip folders
     if (!path.toLowerCase().endsWith(".json")) continue; //Skip the pdf in the files, or just all non-json files.
-  
+
     const text = await zf.async("string");
-  
+
     if (!text.trim()) {
       console.log("Skipping empty file:", path);
       continue;
     }
-  
+
     try {
       const parsed = JSON.parse(text);
-  
+
       if (Array.isArray(parsed)) {
         allEntries.push(...parsed);
       } else {
         allEntries.push(parsed);
       }
-  
     } catch (err) {
       console.log("Invalid JSON, skipping:", path);
       continue;
     }
   }
-  
-   const result = process_data_total(allEntries);
 
-   console.log(result.length);
+  const result = process_data_total(allEntries);
 
-   fs.writeFileSync(
+  console.log(result.length);
+
+  fs.writeFileSync(
     "consolidated_spotify_extended_streaming_history.json",
     JSON.stringify(result, null, 2),
     "utf-8"
   );
-};
+}

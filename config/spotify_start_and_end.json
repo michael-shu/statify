@@ -17,6 +17,7 @@
     "fwdbtn": "Skipped (Next button)",
     "logout": "User logged out",
     "remote": "Interrupted remotely",
+    "playbtn": "Play button pressed",
     "trackdone": "Track finished",
     "trackerror": "Playback error",
     "unexpected-exit": "App exited unexpectedly",
