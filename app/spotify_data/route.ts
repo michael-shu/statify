@@ -7,19 +7,20 @@ import type {
 } from "@/lib/db";
 import { COUNTRY_CODE_TO_NAME } from "@/lib/db";
 
-const format_date = (date_str: string, timeZone = "America/New_York") => {
+const formatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York",
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+});
+
+const format_date = (date_str: string) => {
   const date = new Date(date_str);
 
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
   try {
     return formatter.format(date);
   } catch (e) {
@@ -55,6 +56,8 @@ const calculate_start_end = (entry: SpotifyPlayEntry) => {
 
   return [start_time, end_time];
 };
+
+const map_to_object = (map: Map<any, any>) => Object.fromEntries(map.entries());
 
 const process_entry = (entry: SpotifyPlayEntry): ProcessedEntry => {
   const [start_time, end_time] = calculate_start_end(entry);
@@ -112,7 +115,8 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
   const total_artists = new Map();
   const total_albums = new Map();
   const total_countries = new Map();
-  const total_discovered_per_month = new Map([
+  
+  const total_discovered_per_month = new Map<string, string[][]>([
       ["January",   [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
       ["February",  [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
       ["March",     [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
@@ -127,7 +131,7 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
       ["December",  [[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[],[]]],
   ]);
 
-  for (const entry of data.slice(100000, 110000)) {
+  for (const entry of data) {
     const processed = process_entry(entry);
 
     if (processed.type === "track") {
@@ -151,23 +155,24 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
           skipped: [],
         });
 
-        const discovery_month = new Date(entry.ts).getMonth();
+        const discovery_date = new Date(entry.ts);
+        const discovery_month = discovery_date.toLocaleString('default', {month: 'long'});
+        const discovery_day = discovery_date.getDate() - 1; 
 
         //Discovered map
-        const month_data = total_discovered_per_month.get(discovery_month);
-        
-      }
+        const monthData = total_discovered_per_month.get(discovery_month);
 
-      
+        if (monthData && monthData[discovery_day]) {
+            monthData[discovery_day].push(uri);
+        }
+      }
 
       //Artist map
       let artist = total_artists.get(artistName);
-
       if (!artist) {
         artist = { plays: 0, songs: {} };
         total_artists.set(artistName, artist);
       }
-
       if (!artist.songs[uri]) {
         artist.songs[uri] = {
           uri: uri,
@@ -180,18 +185,17 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
 
       //Album map
       let album = total_albums.get(albumName);
-
       if (!album) {
         album = {
           artist: artistName,
           plays: 0,
           songs: {},
         };
+        total_albums.set(albumName, album);
       }
-
       if (!album.songs[uri]) {
         album.songs[uri] = {
-          uri: uri,
+          //uri: uri,
           title: entry.master_metadata_track_name,
           plays: 0,
         };
@@ -201,8 +205,7 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
 
       //countries
       //codes possible are:
-      const country_name =
-        COUNTRY_CODE_TO_NAME[entry.conn_country] ?? "unknown country";
+      const country_name = COUNTRY_CODE_TO_NAME[entry.conn_country] ?? "unknown country";
       let country = total_countries.get(entry.conn_country);
 
       if (!country) {
@@ -211,10 +214,12 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
           plays: 0,
           songs: {},
         };
+        total_countries.set(entry.conn_country, country);
       }
-      if (!country.songs[entry.conn_country]) {
+
+      if (!country.songs[uri]) {
         country.songs[uri] = {
-          uri: uri,
+          //uri: uri,
           title: entry.master_metadata_track_name,
           plays: 0,
         };
@@ -258,15 +263,74 @@ const process_data_total = (data: SpotifyPlayEntry[]) => {
       JSON.stringify(start_end_data, null, 2),
       "utf-8"
     );
-
-    fs.writeFileSync("config/orderings.sjon", JSON.stringify());
   }
 
+  //For debugging purposes
+  /*
+  fs.writeFileSync("config/orderings.json", JSON.stringify(
+      {
+        top_songs: map_to_object(total_songs),
+        top_artists: map_to_object(total_artists),
+        top_albums: map_to_object(total_albums),
+        top_countries: map_to_object(total_countries),
+        total_discovered_per_month: map_to_object(total_discovered_per_month),
+        reasons_start,
+        reasons_end,
+      }, null, 2), "utf-8"
+    );*/
+
+    /*
   const sorted_songs = Array.from(total_songs.entries()).sort(
     (a, b) => b[1].plays.length - a[1].plays.length
-  );
+  );*/
 
-  return sorted_songs;
+  return {
+        top_songs: map_to_object(total_songs),
+        top_songs_ordered: sort_total_songs(total_songs),
+        //top_artists: map_to_object(total_artists),
+        //top_albums: map_to_object(total_albums),
+        //top_countries: map_to_object(total_countries),
+        //total_discovered_per_month: map_to_object(total_discovered_per_month),
+        //reasons_start,
+        //reasons_end,
+      };
+};
+
+const sort_total_songs = (
+  total_songs: Map<
+    string,
+    {
+      info: {
+        track_name: string;
+        artist_name: string;
+        album_name: string;
+        timestamp_first_played: string;
+      };
+      type: "track";
+      plays: any[];
+      hidden: any[];
+      skipped: any[];
+    }
+  >
+) => {
+  return [...total_songs.entries()]
+    .sort((a, b) => {
+      const aTotal =
+        a[1].plays.length + a[1].hidden.length + a[1].skipped.length;
+      const bTotal =
+        b[1].plays.length + b[1].hidden.length + b[1].skipped.length;
+
+      return bTotal - aTotal;
+    })
+    .map(([uri, song]) => [
+      uri,
+      {
+        ...song,
+        plays: [...song.plays].reverse(),
+        hidden: [...song.hidden].reverse(),
+        skipped: [...song.skipped].reverse(),
+      },
+    ]);
 };
 
 export async function POST(request: Request) {
@@ -311,11 +375,13 @@ export async function POST(request: Request) {
 
   const result = process_data_total(allEntries);
 
-  console.log(result.length);
+  return Response.json(result);
+  //console.log(result.length);
 
+  /*
   fs.writeFileSync(
     "consolidated_spotify_extended_streaming_history.json",
     JSON.stringify(result, null, 2),
     "utf-8"
-  );
+  );*/
 }

@@ -164,7 +164,6 @@ export type ProcessedEntry =
 
 export type view = {
     type: string;
-    ordering: any;
     //For albums: 
     /**
      * KEY: "album_name":
@@ -253,7 +252,6 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   AW: "Aruba",
   AX: "Åland Islands",
   AZ: "Azerbaijan",
-
   BA: "Bosnia and Herzegovina",
   BB: "Barbados",
   BD: "Bangladesh",
@@ -275,7 +273,6 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   BW: "Botswana",
   BY: "Belarus",
   BZ: "Belize",
-
   CA: "Canada",
   CC: "Cocos (Keeling) Islands",
   CD: "Congo, Democratic Republic of the",
@@ -295,14 +292,12 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   CX: "Christmas Island",
   CY: "Cyprus",
   CZ: "Czechia",
-
   DE: "Germany",
   DJ: "Djibouti",
   DK: "Denmark",
   DM: "Dominica",
   DO: "Dominican Republic",
   DZ: "Algeria",
-
   EC: "Ecuador",
   EE: "Estonia",
   EG: "Egypt",
@@ -310,14 +305,12 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   ER: "Eritrea",
   ES: "Spain",
   ET: "Ethiopia",
-
   FI: "Finland",
   FJ: "Fiji",
   FK: "Falkland Islands (Malvinas)",
   FM: "Micronesia (Federated States of)",
   FO: "Faroe Islands",
   FR: "France",
-
   GA: "Gabon",
   GB: "United Kingdom of Great Britain and Northern Ireland",
   GD: "Grenada",
@@ -337,7 +330,6 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   GU: "Guam",
   GW: "Guinea-Bissau",
   GY: "Guyana",
-
   HK: "Hong Kong",
   HM: "Heard Island and McDonald Islands",
   HN: "Honduras",
@@ -367,8 +359,8 @@ export const COUNTRY_CODE_TO_NAME: Record<string, string> = {
   KI: "Kiribati",
   KM: "Comoros",
   KN: "Saint Kitts and Nevis",
-  KP: "Korea (Democratic People's Republic of)",
-  KR: "Korea, Republic of",
+  KP: "North Korea",
+  KR: "South Korea",
   KW: "Kuwait",
   KY: "Cayman Islands",
   KZ: "Kazakhstan",
